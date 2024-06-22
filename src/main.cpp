@@ -4,18 +4,16 @@ RunLED ON + Heartbeat 0.5Hz = waiting for trigger by Photosensor, Ready
 RunLED ON + Heartbeat 2Hz = waiting for trigger by Photosensor, Battery below Warning threshold
 RunLED ON + Heartbeat 5Hz = waiting for trigger by Photosensor, Battery below lowlevel threshold
 ErrorLED ON + Heartbeat OFF + RunLED OFF = ADCautolearn failed (IR Transmitter and Receiver have probably no visual connection), Resume by MCU Reset
-ErrorLED ON + Heartbeat OFF or Stuck + RunLED ON = Photosensor stuck at trigger (IR transmitter and Receiver have probably no visual connection), Auto resume if Photosensor see the Transmitter again 
-
+ErrorLED ON + Heartbeat OFF or stuck + RunLED ON = Photosensor stuck at trigger (IR transmitter and Receiver have probably no visual connection), Auto resume if Photosensor see the Transmitter again 
 */
 
 #include <Arduino.h>
 
 //library for Heartbeat
-//#include <HeartbeatLed.h>
 #include "HeartBeat.h"
 HeartBeatSL HB;
 
-#define debug
+//#define debug
 //#define debug1
 //#define debug2
 //#define debug3 //Battery ADC debugging
@@ -64,13 +62,6 @@ HeartBeatSL HB;
 #define error_threshold 1000
 unsigned long previousMillis= 0;
 
-//unsigned long beat1[] = {200, 100, 200, 500};
-//unsigned long beat2[] = {1500,0,1500,0};
-//unsigned long beat3[] = {500, 500, 500, 500};
-//HeartbeatLed heartbeat(HeartbeatLED, beat1, 4);
-//HeartbeatLed heartbeat2(BattLowLED, beat2, 4);
-
-// put function declarations here:
 void setup() {
   Serial.begin(9600);
   Serial.println("PhotoTrigger started v1.0");
@@ -91,7 +82,7 @@ void setup() {
     delay(80);
   }
 
-  photo_trigger =photo_trigger/(learncount+1);
+  photo_trigger = photo_trigger/(learncount+1);
 
   #ifdef debug
     Serial.print("photo_trigger ");
@@ -100,19 +91,18 @@ void setup() {
 
   if (photo_trigger < minLimit) {
     digitalWrite(ErrorLED,HIGH);
-    Serial.println("Autolearn Error > Reset needed");
+    Serial.println("Autolearn error > reset needed");
     while(1) {
-      //stopp all, need reset
+      //stop all, need mcu reset
     }
   }
 
   if (photo_trigger >= minLimit) {
     photo_trigger = photo_trigger - offset;
     digitalWrite(RunLED,HIGH);
-    Serial.print("Autolearn Finished, will trigger below ");
+    Serial.print("Autolearn finished, will trigger below ");
     Serial.println(photo_trigger);
   }
-
 
   HB.begin(HeartbeatLED, 0.5);
   HB.setDutyCycle(50);
@@ -120,45 +110,18 @@ void setup() {
 
 }
 
-void loop() {
-  HB.beat();
-
-  unsigned long currentMillis = millis();
-  photo_value=analogRead(PhotoSensor);
-  
-  if (photo_value <= photo_trigger)  {
-    digitalWrite(TriggerOut,LOW);
-    delay(triggerholddelay);
-    previousMillis = currentMillis;
-    digitalWrite(TriggerOut,HIGH);
-    while (photo_value <= photo_trigger){
-      photo_value=analogRead(PhotoSensor);
-      currentMillis = millis();
-      if (currentMillis - previousMillis > error_threshold) {
-        digitalWrite(ErrorLED,HIGH);  
-      }
-      #ifdef debug1
-      Serial.print("millis: ");
-      Serial.println(currentMillis);
-      Serial.println(previousMillis);
-      delay(100);
-      #endif
-    }
-    digitalWrite(ErrorLED,LOW);    
-  }
-
-  // checking Battery Voltage
-  #ifdef BattLow_check
-    BattValue = BattValue + analogRead(BattSensor);
+#ifdef BattLow_check
+void checkbatt(){
+  BattValue = BattValue + analogRead(BattSensor);
     bi = bi + 1;
     if (bi >= 25)
     {
       bi=0;
       BattValue = BattValue / 25; 
       #ifdef debug3
-      Serial.print("BattSensor Value: ");
-      Serial.println(BattValue);
-      delay(200);
+        Serial.print("BattSensor Value: ");
+        Serial.println(BattValue);
+        delay(200);
       #endif
 
       if (BattValue <= ADC_BattLow)
@@ -191,13 +154,49 @@ void loop() {
         HB.setDutyCycle(50);
       }
     } 
-  #endif
+}
+#endif
 
-
+void checkbarrier(){
+  unsigned long currentMillis = millis();
+  photo_value=analogRead(PhotoSensor);
+  if (photo_value <= photo_trigger)  {
+    digitalWrite(TriggerOut,LOW);
+    delay(triggerholddelay);
+    previousMillis = currentMillis;
+    digitalWrite(TriggerOut,HIGH);
+    while (photo_value <= photo_trigger){
+      photo_value=analogRead(PhotoSensor);
+      currentMillis = millis();
+      if (currentMillis - previousMillis > error_threshold) {
+        digitalWrite(ErrorLED,HIGH);  
+      }
+      #ifdef debug1
+      Serial.print("millis: ");
+      Serial.println(currentMillis);
+      Serial.println(previousMillis);
+      delay(100);
+      #endif
+    }
+    digitalWrite(ErrorLED,LOW);    
+  }
   #ifdef debug1
     Serial.print("Raw Sensor Value ");
     Serial.println(analogRead(PhotoSensor));
     delay(300);
+  #endif
+}
+
+void loop() {
+  //start Heartbeat LED
+  HB.beat();
+  
+  //check light barrier
+  checkbarrier();
+
+  // checking battery voltage
+  #ifdef BattLow_check
+    checkbatt();
   #endif
   
 }
