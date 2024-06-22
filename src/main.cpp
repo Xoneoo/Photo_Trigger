@@ -70,14 +70,16 @@ void setup() {
   pinMode(RunLED, OUTPUT);
   pinMode(ErrorLED, OUTPUT);
   pinMode(TriggerOut, OUTPUT);
-  digitalWrite(TriggerOut, HIGH);
+  digitalWrite(TriggerOut, LOW);
 
 #ifdef ADCautolearn
   Serial.println("ADC Autolearn Start");
   photo_value = analogRead(PhotoSensor);
 
   for (int i=0; i <= learncount; i++){
-    Serial.println(photo_trigger);
+    #ifdef debug1
+      Serial.println(photo_trigger);
+    #endif  
     photo_trigger = photo_trigger + analogRead(PhotoSensor);
     delay(80);
   }
@@ -161,10 +163,10 @@ void checkbarrier(){
   unsigned long currentMillis = millis();
   photo_value=analogRead(PhotoSensor);
   if (photo_value <= photo_trigger)  {
-    digitalWrite(TriggerOut,LOW);
+    digitalWrite(TriggerOut,HIGH);
     delay(triggerholddelay);
     previousMillis = currentMillis;
-    digitalWrite(TriggerOut,HIGH);
+    digitalWrite(TriggerOut,LOW);
     while (photo_value <= photo_trigger){
       photo_value=analogRead(PhotoSensor);
       currentMillis = millis();
