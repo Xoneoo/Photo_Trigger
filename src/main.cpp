@@ -1,10 +1,17 @@
+
+
 /*
-LED description:
-RunLED ON + Heartbeat 0.5Hz = waiting for trigger by Photosensor, Ready
-RunLED ON + Heartbeat 2Hz = waiting for trigger by Photosensor, Battery below Warning threshold
-RunLED ON + Heartbeat 5Hz = waiting for trigger by Photosensor, Battery below lowlevel threshold
-ErrorLED ON + Heartbeat OFF + RunLED OFF = ADCautolearn failed (IR Transmitter and Receiver have probably no visual connection), Resume by MCU Reset
-ErrorLED ON + Heartbeat OFF or stuck + RunLED ON = Photosensor stuck at trigger (IR transmitter and Receiver have probably no visual connection), Auto resume if Photosensor see the Transmitter again 
+##########################################################################################################################################################
+# Photo Trigger via a light barrier controlled by an AVRMega MCU including Auto ADC learning on startup and Battery Low indicator 
+#
+# LED description (on Autolearn Mode):
+# RunLED ON + Heartbeat 0.5Hz = waiting for trigger by Photosensor, Ready
+# RunLED ON + Heartbeat 2Hz = waiting for trigger by Photosensor, Battery below warning threshold
+# RunLED ON + Heartbeat 5Hz = waiting for trigger by Photosensor, Battery below lowlevel threshold
+# ErrorLED ON + Heartbeat OFF + RunLED OFF = ADCautolearn failed (IR Transmitter and Receiver have probably no visual connection), resume by MCU Reset
+# ErrorLED ON + Heartbeat OFF or stuck + RunLED ON = Photosensor stuck at trigger (IR transmitter and Receiver have probably no visual connection),
+# auto resume if Photosensor see the Transmitter again 
+##########################################################################################################################################################
 */
 
 #include <Arduino.h>
@@ -13,12 +20,13 @@ ErrorLED ON + Heartbeat OFF or stuck + RunLED ON = Photosensor stuck at trigger 
 #include "HeartBeat.h"
 HeartBeatSL HB;
 
+//debugging via serial output
 //#define debug
 //#define debug1
 //#define debug2
 //#define debug3 //Battery ADC debugging
 
-// Battery low check
+//Battery low check
 #define BattLow_check
 #if defined BattLow_check
   #define ADC_BattWarning 500 //need to be set by debug3
@@ -44,10 +52,14 @@ HeartBeatSL HB;
   #define RunLED 
   #define ErrorLED 
   #define TriggerOut 
-  #define PhotoSensor 
-  #define BattSensor 
+  #define PhotoSensor A7
+  #define BattSensor A0
 #endif
 
+//Invert TriggerOut logic to low active
+//#define TOInvert
+
+//Automatic learn Phototransistors ADC value 
 #define ADCautolearn
 #ifdef ADCautolearn
   #define minLimit 500
@@ -55,13 +67,19 @@ HeartBeatSL HB;
   #define learncount 25 
   int photo_value = 0;
   int photo_trigger = 0;
+#endif
 
+#ifndef ADCautolearn
+  #define photo_trigger 500
+  int photo_value = 0;
 #endif
 
 #define triggerholddelay 150
 #define error_threshold 1000
 unsigned long previousMillis= 0;
 
+//###############################################
+//Setup
 void setup() {
   Serial.begin(9600);
   Serial.println("PhotoTrigger started v1.0");
@@ -70,7 +88,12 @@ void setup() {
   pinMode(RunLED, OUTPUT);
   pinMode(ErrorLED, OUTPUT);
   pinMode(TriggerOut, OUTPUT);
-  digitalWrite(TriggerOut, LOW);
+
+  #ifdef TOInvert
+    digitalWrite(TriggerOut, HIGH);
+  #else
+    digitalWrite(TriggerOut, LOW); 
+  #endif
 
 #ifdef ADCautolearn
   Serial.println("ADC Autolearn Start");
@@ -105,20 +128,26 @@ void setup() {
     Serial.print("Autolearn finished, will trigger below ");
     Serial.println(photo_trigger);
   }
-
-  HB.begin(HeartbeatLED, 0.5);
-  HB.setDutyCycle(50);
 #endif 
+
+#ifndef ADCautolearn
+  digitalWrite(RunLED,HIGH);
+#endif
+
+HB.begin(HeartbeatLED, 0.5);
+HB.setDutyCycle(50);
 
 }
 
+//###############################################
+//Battery voltage check
 #ifdef BattLow_check
 void checkbatt(){
   BattValue = BattValue + analogRead(BattSensor);
     bi = bi + 1;
     if (bi >= 25)
     {
-      bi=0;
+      bi = 0;
       BattValue = BattValue / 25; 
       #ifdef debug3
         Serial.print("BattSensor Value: ");
@@ -159,14 +188,24 @@ void checkbatt(){
 }
 #endif
 
+//###############################################
+//Photo barrier check
 void checkbarrier(){
   unsigned long currentMillis = millis();
   photo_value=analogRead(PhotoSensor);
   if (photo_value <= photo_trigger)  {
-    digitalWrite(TriggerOut,HIGH);
+    #ifdef TOInvert
+      digitalWrite(TriggerOut, LOW);
+    #else
+      digitalWrite(TriggerOut, HIGH); 
+    #endif
     delay(triggerholddelay);
     previousMillis = currentMillis;
-    digitalWrite(TriggerOut,LOW);
+    #ifdef TOInvert
+      digitalWrite(TriggerOut, HIGH);
+    #else
+      digitalWrite(TriggerOut, LOW); 
+    #endif
     while (photo_value <= photo_trigger){
       photo_value=analogRead(PhotoSensor);
       currentMillis = millis();
@@ -189,6 +228,8 @@ void checkbarrier(){
   #endif
 }
 
+//###############################################
+//Loop
 void loop() {
   //start Heartbeat LED
   HB.beat();
